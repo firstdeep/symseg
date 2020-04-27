@@ -225,7 +225,9 @@ int main(int argc, char** argv)
     symmetryUnprojected.setOrigin(origin / scalingFactor + cloudCentroid.head(3));
     reflSymmetryUnprojected.push_back(symmetryUnprojected);
   }
-  
+
+  std::cout << "--Output path:" << outputDirnamePath << "--" << std::endl;
+
   // Save result to file.
   if (!outputDirnamePath.empty()) {
     std::string outputFilePath = utl::fullfile(outputDirnamePath, "symmetries.txt");
@@ -254,73 +256,73 @@ int main(int argc, char** argv)
   std::cout << "| NUMPAD Delete     | visualize occlusion space" << std::endl;
   std::cout << "-------------------------------" << std::endl;
 
-  VisState visState;
-  pcl::visualization::PCLVisualizer visualizer;
-  Eigen::Vector4f cloudCentroidVis;
-  pcl::compute3DCentroid<PointNC>(*sceneCloud, cloudCentroidVis);
-  
-  visualizer.setCameraPosition (  0.0, 0.0, -1.0,   // camera position
-                                  cloudCentroidVis[0], cloudCentroidVis[1], cloudCentroidVis[2],   // viewpoint
-                                  0.0, -1.0, 0.0,   // normal
-                                  0.0);            // viewport
-  visualizer.setBackgroundColor (utl::bgColor.r, utl::bgColor.g, utl::bgColor.b);
-  visualizer.registerKeyboardCallback(keyboard_callback, (void*)(&visState));  
-  visState.updateDisplay_ = true;
-    
-  while (!visualizer.wasStopped())
-  {
-    // Update display if needed
-    if (visState.updateDisplay_)
-    {
-      // First remove everything
-      visualizer.removeAllPointClouds();
-      visualizer.removeAllShapes();
-      visualizer.removeAllCoordinateSystems();
-      visState.updateDisplay_ = false;
-      
-      // Then add things as required
-      if (visState.cloudDisplay_ == VisState::CLOUD)
-      {
-        utl::showPointCloudColor<PointNC>(visualizer, sceneCloud, "cloud", visState.pointSize_);
-        if (visState.showNormals_)
-          utl::showNormalCloud<PointNC>(visualizer, sceneCloud, 10, options.voxel_size(), "normals", visState.pointSize_, utl::green);
-        
-        visualizer.addText("Original cloud", 0, 150, 24, 1.0, 1.0, 1.0);
-      }
-
-      else if ( visState.cloudDisplay_ == VisState::REFLECTIONAL_SYMMETRIES)
-      {
-        if (reflSymmetry.size() > 0) {
-          visState.segIterator_ = utl::clampValueCircular<int>(visState.segIterator_, 0, reflSymmetry.size()-1);
-          int symId = visState.segIterator_;          
-          utl::showPointCloudColor<PointNC> (visualizer, sceneCloud, "object", visState.pointSize_);
-
-          // Show symmetry
-          if (visState.showSymmetry_)
-            sym::showCloudReflectionalSymmetry<PointNC>(visualizer, sceneCloud, reflSymmetry[symId], "symmetry", 1.0);
-          
-          if (visState.showReconstructedCloud_) {
-            pcl::PointCloud<PointNC>::Ptr sceneCloudReflected  (new pcl::PointCloud<PointNC>);
-            reflSymmetry[symId].reflectCloud(*sceneCloud, *sceneCloudReflected);
-            utl::showPointCloud<PointNC>(visualizer, sceneCloudReflected, "cloud_reflected", visState.pointSize_, utl::blue);
-          }
-          
-        } else {
-          visState.segIterator_ = -1;
-          utl::showPointCloudColor<PointNC>(visualizer, sceneCloud, "cloud", visState.pointSize_);
-          if (visState.showNormals_)
-            utl::showNormalCloud<PointNC>(visualizer, sceneCloud, 10, 0.02, "normals", visState.pointSize_, utl::green);
-        }
-                            
-        visualizer.addText("Reflectional symmetry ", 0, 150, 24, 1.0, 1.0, 1.0);
-        visualizer.addText("Symmetry " + std::to_string(visState.segIterator_+1) + " / " + std::to_string(reflSymmetry.size()), 15, 125, 24, 1.0, 1.0, 1.0);        
-      }
-    }
-    
-    // Spin once
-    visualizer.spinOnce();
-    boost::this_thread::sleep (boost::posix_time::milliseconds (10));
-  }
+//  VisState visState;
+//  pcl::visualization::PCLVisualizer visualizer;
+//  Eigen::Vector4f cloudCentroidVis;
+//  pcl::compute3DCentroid<PointNC>(*sceneCloud, cloudCentroidVis);
+//
+//  visualizer.setCameraPosition (  0.0, 0.0, -1.0,   // camera position
+//                                  cloudCentroidVis[0], cloudCentroidVis[1], cloudCentroidVis[2],   // viewpoint
+//                                  0.0, -1.0, 0.0,   // normal
+//                                  0.0);            // viewport
+//  visualizer.setBackgroundColor (utl::bgColor.r, utl::bgColor.g, utl::bgColor.b);
+//  visualizer.registerKeyboardCallback(keyboard_callback, (void*)(&visState));
+//  visState.updateDisplay_ = true;
+//
+//  while (!visualizer.wasStopped())
+//  {
+//    // Update display if needed
+//    if (visState.updateDisplay_)
+//    {
+//      // First remove everything
+//      visualizer.removeAllPointClouds();
+//      visualizer.removeAllShapes();
+//      visualizer.removeAllCoordinateSystems();
+//      visState.updateDisplay_ = false;
+//
+//      // Then add things as required
+//      if (visState.cloudDisplay_ == VisState::CLOUD)
+//      {
+//        utl::showPointCloudColor<PointNC>(visualizer, sceneCloud, "cloud", visState.pointSize_);
+//        if (visState.showNormals_)
+//          utl::showNormalCloud<PointNC>(visualizer, sceneCloud, 10, options.voxel_size(), "normals", visState.pointSize_, utl::green);
+//
+//        visualizer.addText("Original cloud", 0, 150, 24, 1.0, 1.0, 1.0);
+//      }
+//
+//      else if ( visState.cloudDisplay_ == VisState::REFLECTIONAL_SYMMETRIES)
+//      {
+//        if (reflSymmetry.size() > 0) {
+//          visState.segIterator_ = utl::clampValueCircular<int>(visState.segIterator_, 0, reflSymmetry.size()-1);
+//          int symId = visState.segIterator_;
+//          utl::showPointCloudColor<PointNC> (visualizer, sceneCloud, "object", visState.pointSize_);
+//
+//          // Show symmetry
+//          if (visState.showSymmetry_)
+//            sym::showCloudReflectionalSymmetry<PointNC>(visualizer, sceneCloud, reflSymmetry[symId], "symmetry", 1.0);
+//
+//          if (visState.showReconstructedCloud_) {
+//            pcl::PointCloud<PointNC>::Ptr sceneCloudReflected  (new pcl::PointCloud<PointNC>);
+//            reflSymmetry[symId].reflectCloud(*sceneCloud, *sceneCloudReflected);
+//            utl::showPointCloud<PointNC>(visualizer, sceneCloudReflected, "cloud_reflected", visState.pointSize_, utl::blue);
+//          }
+//
+//        } else {
+//          visState.segIterator_ = -1;
+//          utl::showPointCloudColor<PointNC>(visualizer, sceneCloud, "cloud", visState.pointSize_);
+//          if (visState.showNormals_)
+//            utl::showNormalCloud<PointNC>(visualizer, sceneCloud, 10, 0.02, "normals", visState.pointSize_, utl::green);
+//        }
+//
+//        visualizer.addText("Reflectional symmetry ", 0, 150, 24, 1.0, 1.0, 1.0);
+//        visualizer.addText("Symmetry " + std::to_string(visState.segIterator_+1) + " / " + std::to_string(reflSymmetry.size()), 15, 125, 24, 1.0, 1.0, 1.0);
+//      }
+//    }
+//
+//    // Spin once
+//    visualizer.spinOnce();
+//    boost::this_thread::sleep (boost::posix_time::milliseconds (10));
+//  }
   
   return 0;
 }
