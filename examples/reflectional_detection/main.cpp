@@ -226,6 +226,7 @@ int main(int argc, char** argv)
     reflSymmetryUnprojected.push_back(symmetryUnprojected);
   }
 
+  outputDirnamePath = "./";
   std::cout << "--Output path:" << outputDirnamePath << "--" << std::endl;
 
   // Save result to file.
