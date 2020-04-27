@@ -30,6 +30,8 @@
 /*  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.     */
 /*****************************************************************************/
 
+#pragma once
+
 // PCL
 #include <pcl/io/ply_io.h>
 #include <pcl/common/time.h>
@@ -49,6 +51,11 @@
 // Project includes
 #include "vis.hpp"
 
+// custom includes
+#include <pcl/io/io.h>
+#include <pcl/features/integral_image_normal.h>
+#include <pcl/visualization/cloud_viewer.h>
+
 typedef pcl::PointXYZRGBNormal PointNC;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -57,34 +64,34 @@ void parseCommandLine(int argc, char** argv, std::string &inputCloudPath, std::s
   inputCloudPath = "";
   outputDirnamePath = "";
   visualize = true;
-  
+
   // Check parameters
   for (size_t i = 1; i < static_cast<size_t>(argc); i++)
   {
     std::string curParameter (argv[i]);
-        
+
     if (curParameter == "-novis")
-      visualize = false;   
-    
-        
+      visualize = false;
+
+
     else if (inputCloudPath == "" && curParameter[0] != '-')
       inputCloudPath = curParameter;
 
     else if (outputDirnamePath == "" && curParameter[0] != '-')
       outputDirnamePath = curParameter;
-    
-    else 
+
+    else
       std::cout << "Unknown parameter '" << curParameter << "'" << std::endl;
-  }  
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char** argv)
-{  
+{
   //----------------------------------------------------------------------------
   // Parse command line
   //----------------------------------------------------------------------------
-  
+
   std::string inputCloudPath, outputDirnamePath;
   bool visualize;
   parseCommandLine(argc, argv, inputCloudPath, outputDirnamePath, visualize);
@@ -92,17 +99,17 @@ int main(int argc, char** argv)
   //----------------------------------------------------------------------------
   // Generate paths and check command line arguments
   //----------------------------------------------------------------------------
-    
+
   if (!utl::isFile(inputCloudPath))
   {
     std::cout << "Couldn't find pointcloud file '" << inputCloudPath << "'" << std::endl;
     return -1;
   }
-  
+
   //----------------------------------------------------------------------------
   // Parameters
   //----------------------------------------------------------------------------
-  
+
   // NOTE: you can change the parameters of the algorithm by modifying the
   // values in the file below.
   std::string options_file_path = "../examples/reflectional_detection/config.pbtxt";
@@ -115,21 +122,21 @@ int main(int argc, char** argv)
   proto::ReflectionalSymmetryDetectionExampleOptions options;
   std::ifstream input(options_file_path);
   std::stringstream input_string;
-  input_string << input.rdbuf();  
+  input_string << input.rdbuf();
   google::protobuf::TextFormat::ParseFromString(input_string.str(), &options);
-  
+
   // Reflectional symmetry detection parameters
   sym::ReflSymDetectParams reflDetParams(options.reflectional_symmetry_detection_options());
-  reflDetParams.voxel_size                  = options.voxel_size() * 2;   // Voxel size used in voxelgrid downsample.  
-  reflDetParams.max_correspondence_reflected_distance =                   // Maximum allowed distance between the reflections of two points forming a symmetric 
+  reflDetParams.voxel_size                  = options.voxel_size() * 2;   // Voxel size used in voxelgrid downsample.
+  reflDetParams.max_correspondence_reflected_distance =                   // Maximum allowed distance between the reflections of two points forming a symmetric
                                         reflDetParams.voxel_size / 2;
-    
+
   //----------------------------------------------------------------------------
   // Load data.
   //----------------------------------------------------------------------------
-  
+
   std::cout << "Loading data..." << std::endl;
-  
+
   pcl::PointCloud<PointNC>::Ptr sceneCloudHighRes  (new pcl::PointCloud<PointNC>);
   if (pcl::io::loadPLYFile (inputCloudPath, *sceneCloudHighRes))
     return -1;
@@ -137,14 +144,14 @@ int main(int argc, char** argv)
   //----------------------------------------------------------------------------
   // Demean and rescale the scene.
   //----------------------------------------------------------------------------
-  
+
   pcl::PCA<PointNC> pca;
   pca.setInputCloud(sceneCloudHighRes);
 
   // Find pointcloud diagonal length.
   pcl::PointCloud<PointNC>::Ptr sceneCloudHighResAligned  (new pcl::PointCloud<PointNC>);
   pca.project(*sceneCloudHighRes, *sceneCloudHighResAligned);
-  
+
   PointNC bbxMin, bbxMax;
   pcl::getMinMax3D(*sceneCloudHighResAligned, bbxMin, bbxMax);
   float diagonalLength = (bbxMax.getVector3fMap() - bbxMin.getVector3fMap()).norm();
@@ -152,23 +159,23 @@ int main(int argc, char** argv)
 
   // Find pointcloud mean.
   Eigen::Vector4f cloudCentroid = pca.getMean();
-  
+
   // Demean and scal pointcloud
   for (size_t point_id = 0; point_id < sceneCloudHighRes->size(); point_id++)
   {
     sceneCloudHighRes->points[point_id].getVector3fMap() -= cloudCentroid.head(3);
     sceneCloudHighRes->points[point_id].getVector3fMap() *= scalingFactor;
   }
-    
+
   //----------------------------------------------------------------------------
   // Downsample the scene.
   //----------------------------------------------------------------------------
-  
+
   double start = pcl::getTime ();
   double totalStart = pcl::getTime ();
-  
-  pcl::PointCloud<PointNC>::Ptr     sceneCloud                (new pcl::PointCloud<PointNC>);  
-  
+
+  pcl::PointCloud<PointNC>::Ptr     sceneCloud                (new pcl::PointCloud<PointNC>);
+
   std::cout << "Downsampling input pointcloud..." << std::endl;
   utl::Downsample<PointNC> ds;
   ds.setInputCloud(sceneCloudHighRes);
@@ -177,21 +184,40 @@ int main(int argc, char** argv)
   ds.filter(*sceneCloud);
   std::cout << sceneCloudHighRes->size() << " points in original cloud." << std::endl;
   std::cout << sceneCloud->size() << " points after downsampling." << std::endl;
-      
+
+  //----------------------------------------------------------------------------
+  // Point normal creation (LAVET AF OS)
+  //----------------------------------------------------------------------------
+  pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal>);
+
+  pcl::IntegralImageNormalEstimation<PointNC, pcl::Normal> ne;
+  ne.setNormalEstimationMethod (ne.AVERAGE_3D_GRADIENT);
+  ne.setMaxDepthChangeFactor(0.02f);
+  ne.setNormalSmoothingSize(10.0f);
+  ne.setInputCloud(sceneCloud);
+  ne.compute(*normals);
+
+  //TODO: Create new PLY with created normals.
+  std::cerr << "Normals: " << std::endl;
+  for (std::size_t i = 0; i < normals->points.size (); ++i){
+    std::cerr << "    " << normals->points[i].n_x << " " << normals->points[i].n_y << " " << normals->points[i].n_z << std::endl;
+  }
+
+
   //----------------------------------------------------------------------------
   // Reflectional symmetry detection
   //----------------------------------------------------------------------------
-    
+
   std::cout << "Detecting reflectional symmetry..." << std::endl;
-  start = pcl::getTime (); 
-  
+  start = pcl::getTime ();
+
   std::vector<sym::ReflectionalSymmetry>  reflSymmetry;
   std::vector<std::vector<int> >          reflSymmetrySupport;
   utl::Map dummy_segments (1);
   for (size_t point_id = 0; point_id < sceneCloud->size(); point_id++) {
     dummy_segments[0].push_back(point_id);
   }
-  
+
   if (  !detectReflectionalSymmetryScene<PointNC> ( sceneCloud,
                                                     nullptr,
                                                     dummy_segments,
@@ -204,7 +230,7 @@ int main(int argc, char** argv)
   }
 
   std::cout << "  " << reflSymmetry.size() << " symmetries detected." << std::endl;
-  std::cout << "  " << (pcl::getTime() - start) << " seconds." << std::endl;  
+  std::cout << "  " << (pcl::getTime() - start) << " seconds." << std::endl;
 
   std::cout << "----------------------------" << std::endl;
   float execution_time = (pcl::getTime() - totalStart);
@@ -214,10 +240,10 @@ int main(int argc, char** argv)
   // Save results to file
   //----------------------------------------------------------------------------
 
-  // Before saving the symmetries we need to undo the effects of scaling and 
+  // Before saving the symmetries we need to undo the effects of scaling and
   // demeaning the scene.
   std::vector<sym::ReflectionalSymmetry>  reflSymmetryUnprojected;
-  
+
   for (size_t sym_id = 0; sym_id < reflSymmetry.size(); sym_id++)
   {
     sym::ReflectionalSymmetry symmetryUnprojected = reflSymmetry[sym_id];
@@ -226,28 +252,25 @@ int main(int argc, char** argv)
     reflSymmetryUnprojected.push_back(symmetryUnprojected);
   }
 
-  outputDirnamePath = "./";
-  std::cout << "--Output path:" << outputDirnamePath << "--" << std::endl;
-
   // Save result to file.
   if (!outputDirnamePath.empty()) {
     std::string outputFilePath = utl::fullfile(outputDirnamePath, "symmetries.txt");
     std::cout << "Saving segmentation results to " << outputFilePath << std::endl;
     sym::writeSymmetriesToFile(reflSymmetryUnprojected, outputFilePath);
   }
-  
+
   // // Save timing information to a file.
   // std::ofstream outfile;
   // outfile.open("./reflectional_segmentation_timings.txt", std::ios_base::app);
   // outfile << utl::getBasename(sceneDirname) << ": " << execution_time << "\n";
-  
+
   //----------------------------------------------------------------------------
   // Visualization.
   //----------------------------------------------------------------------------
 
   if (!visualize)
     return 0;
-    
+
   //Print instructions
   std::cout << "-------------------------------" << std::endl;
   std::cout << "|   Visualization controls    |" << std::endl;
@@ -256,6 +279,8 @@ int main(int argc, char** argv)
   std::cout << "| Arrow keys        | switch between different segments/symmetries" << std::endl;
   std::cout << "| NUMPAD Delete     | visualize occlusion space" << std::endl;
   std::cout << "-------------------------------" << std::endl;
+
+  std::cout << "PROGRAM FINISH" << std::endl;
 
 //  VisState visState;
 //  pcl::visualization::PCLVisualizer visualizer;
