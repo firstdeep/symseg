@@ -200,7 +200,7 @@ int main(int argc, char** argv)
   //TODO: Create new PLY with created normals.
   std::cerr << "Normals: " << std::endl;
   for (std::size_t i = 0; i < normals->points.size (); ++i){
-    std::cout << "normals..." << std::endl;
+    std::cout << "In to normals..." << std::endl;
     //std::cerr << "    " << normals->points[i].nx << " " << normals->points[i].ny << " " << normals->points[i].nz << std::endl;
   }
 
